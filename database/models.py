@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, ForeignKey, Column, BigInteger, Boolean, Float
+from sqlalchemy import Integer, String, ForeignKey, Column, BigInteger, Boolean, Numeric
 from sqlalchemy.orm import DeclarativeBase, relationship
 from database.engine import engine
 
@@ -14,12 +14,13 @@ class User(Base):
     referrer_id = Column(BigInteger)
 
     stats = relationship('Stats', back_populates='user', uselist=False)
+    orders = relationship('Order', back_populates='user')
 
 class Stats(Base):
     __tablename__ = 'stats'
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, ForeignKey('users.user_id'), unique=True)
-    balance = Column(BigInteger, default=0, nullable=False)
+    balance = Column(Numeric(10, 2), default=0.00)
     total_spend = Column(BigInteger, default=0, nullable=False)
 
     user = relationship('User', back_populates='stats')
@@ -42,11 +43,20 @@ class Products(Base):
     category_rel = relationship('Category', back_populates='products')
     network = Column(String)
     description = Column(String)
-    rate = Column(Float)
+    rate = Column(Numeric(precision=20, scale=4))
     min = Column(Integer)
     max = Column(Integer)
     refill = Column(Boolean)
     canceling_is_available = Column(Boolean)
     cancel = Column(Boolean)
+
+class Order(Base):
+    __tablename__ = 'orders'
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(BigInteger, ForeignKey('users.user_id'))
+    order_sum = Column(Numeric(10, 2), nullable=False)
+    service_id = Column(Integer)
+
+    user = relationship('User', back_populates='orders')
 
 Base.metadata.create_all(engine)

@@ -4,8 +4,13 @@ from aiogram.filters.command import Command, CommandStart, CommandObject
 from aiogram import Router, F, types
 from logic.user_logic import registration, is_user
 from keyboards.main_menu import main_menu_kb, profile_kb
-from logic.trade_logic import category_render, products_render, buy_product_render
+from logic.trade_logic import category_render, products_render, buy_product_render, order_processing
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.context import FSMContext
 
+class OrderProcess(StatesGroup):
+    waiting_for_link = State()     #  Ссылка
+    waiting_for_count = State()    # Количество
 router = Router()
 
 @router.message(CommandStart())
@@ -69,3 +74,45 @@ async def select_product_inline(callback: types.CallbackQuery):
     info_text, keyboard = await asyncio.to_thread(buy_product_render, product_id)
     await callback.message.edit_text(text=info_text, reply_markup=keyboard, parse_mode="Markdown") 
     await callback.answer()
+
+@router.callback_query(F.data.startswith("buy_"))
+async def start_buy(callback: types.CallbackQuery, state: FSMContext):
+    service_id = callback.data.split("_")[1]
+    await state.update_data(order_service_id=service_id)
+    await state.set_state(OrderProcess.waiting_for_link)   
+    await callback.message.answer("🔗 Пришлите ссылку на объект накрутки (профиль/пост):")
+    await callback.answer()
+
+@router.message(OrderProcess.waiting_for_link)
+async def get_link(message: types.Message, state: FSMContext):
+    # Сохраняем ссылку в черновик
+    await state.update_data(order_link=message.text)
+    
+    # Переключаем на ожидание количества
+    await state.set_state(OrderProcess.waiting_for_count)
+    
+    await message.answer("🔢 Теперь введите количество (только цифры):")
+
+@router.message(OrderProcess.waiting_for_count)
+async def get_count(message: types.Message, state: FSMContext):
+    if not message.text.isdigit():
+        return await message.answer("Бро, нужно именно число! Попробуй еще раз:")
+
+    count = int(message.text)
+    
+    # Вытаскиваем всё, что накопили в черновике
+    data = await state.get_data()
+    s_id = data['order_service_id']
+    link = data['order_link']
+    u_id = message.from_user.id
+
+    # ВЫЗЫВАЕМ ТВОЮ ФУНКЦИЮ (про которую мы говорили выше)
+    # Важно: вызываем через await, так как она асинхронная!
+    result = await order_processing(int(u_id), int(s_id), int(count), link, message)
+    
+    # Если функция вернула строку (ошибку) — выводим её
+    if isinstance(result, str):
+        await message.answer(result)
+    
+    # Очищаем состояние, чтобы юзер мог снова пользоваться ботом
+    await state.clear()
