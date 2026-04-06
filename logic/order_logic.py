@@ -15,12 +15,32 @@ from datetime import datetime
 def get_my_orders(uid):
     builder = InlineKeyboardBuilder()
     with Session() as session:
-        orders = session.execute(select(Order).where(Order.owner_id == uid)).scalars().all()
-        serv_ids = [order.service_id for order in orders]
-        service = session.execute(select(Products).where(Products.service_id.in_(serv_ids))).scalars().all()
-        for serv, order in zip(service, orders):
-            builder.row(types.InlineKeyboardButton(text=f"{serv.name}", callback_data=f'select_{order.order_id}_{serv.service_id}'))
-        return(builder.as_markup())
+        orders = session.execute(select(Order).where(Order.owner_id == uid, Order.status.not_in(["Completed", "Canceled"]))).scalars().all()
+        if not orders:
+            return None
+        serv_ids = list(set(order.service_id for order in orders))
+        services_query = session.execute(select(Products).where(Products.service_id.in_(serv_ids))).scalars().all()
+        services_dict = {s.service_id: s for s in services_query}
+        for order in orders:
+            serv = services_dict.get(order.service_id)
+            name = serv.name if serv else f"Услуга #{order.service_id}"
+            builder.row(types.InlineKeyboardButton(text=f"{name} (ID: {order.order_id})", callback_data=f'select_{order.order_id}_{order.service_id}'))
+        return builder.as_markup()
+    
+def get_my_old_orders(uid):
+    builder = InlineKeyboardBuilder()
+    with Session() as session:
+        orders = session.execute(select(Order).where(Order.owner_id == uid, Order.status.in_(['Completed', 'Canceled']))).scalars().all()
+        if not orders:
+            return None
+        serv_ids = list(set(order.service_id for order in orders))
+        services_query = session.execute(select(Products).where(Products.service_id.in_(serv_ids))).scalars().all()
+        services_dict = {s.service_id: s for s in services_query}
+        for order in orders:
+            serv = services_dict.get(order.service_id)
+            name = serv.name if serv else f'Услуга #{order.service_id}'
+            builder.row(types.InlineKeyboardButton(text=f"{name} (ID: {order.order_id})", callback_data=f'selectold_{order.order_id}_{order.service_id}'))
+        return builder.as_markup()
     
 async def update_order(order_id):
     async with AsyncSession() as session:
@@ -74,6 +94,11 @@ def inline_keyboards_order(uid, order_id, service_id):
 #    builder.row(types.InlineKeyboardButton(text='Рефилл', callback_data=f'refill_{order_id}_{service_id}'))
 #    builder.row(types.InlineKeyboardButton(text='Отменить заказ', callback_data=f'cancel_{order_id}')
     builder.row(types.InlineKeyboardButton(text='Назад', callback_data=f'go_my_orders'))
+    return builder.as_markup()
+
+def inline_keyboards_old_order(uid):
+    builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text='Назад', callback_data=f'go_to_old_orders'))
     return builder.as_markup()
 
 def get_my_order(order_id, service_id):

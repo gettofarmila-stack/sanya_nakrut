@@ -5,7 +5,7 @@ from aiogram import Router, F, types
 from logic.user_logic import registration, is_user
 from keyboards.main_menu import main_menu_kb, profile_kb, orders_kb
 from logic.trade_logic import category_render, products_render, buy_product_render, order_processing
-from logic.order_logic import get_my_orders, get_my_order, inline_keyboards_order, update_order, refill_order
+from logic.order_logic import get_my_orders, get_my_order, inline_keyboards_order, update_order, refill_order, get_my_old_orders, inline_keyboards_old_order
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from aiogram.exceptions import TelegramBadRequest
@@ -45,6 +45,24 @@ async def order_menu_hand(message: types.Message):
 async def now_orders_hand(message: types.Message):
     orders = await asyncio.to_thread(get_my_orders, message.from_user.id)
     await message.answer(f'Ваши заказы: ', reply_markup=orders)
+
+@router.message(F.text == 'История заказов')
+async def old_orders_hand(message: types.Message):
+    orders = await asyncio.to_thread(get_my_old_orders, message.from_user.id)
+    await message.answer(f'Ваши заказы: ', reply_markup=orders)
+
+@router.callback_query(F.data.startswith('selectold_'))
+async def select_old_order(callback: types.CallbackQuery):
+    order_id = int(callback.data.split('_')[1])
+    service_id = int(callback.data.split('_')[2])
+    orders = await asyncio.to_thread(get_my_order, order_id, service_id)
+    keyboard = await asyncio.to_thread(inline_keyboards_old_order, callback.from_user.id)
+    await callback.message.edit_text(orders, reply_markup=keyboard)
+
+@router.callback_query(F.data.startswith('go_to_old_orders'))
+async def go_to_old_orders_inline(callback: types.CallbackQuery):
+    orders = await asyncio.to_thread(get_my_old_orders, callback.from_user.id)
+    await callback.message.edit_text(f'Ваши заказы:', reply_markup=orders)
 
 @router.callback_query(F.data.startswith('go_my_orders'))
 async def go_my_orders(callback: types.CallbackQuery):
