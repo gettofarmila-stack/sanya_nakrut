@@ -1,18 +1,21 @@
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, Router, types
 from config import my_token
 from handlers import common
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s') 
 
+router = Router()
+@router.error()
+async def error_handler(event: types.ErrorEvent):
+    logging.error(f"Произошла дичь: {event.exception}")
+    
 async def main():
     bot = Bot(token=my_token)
     dp = Dispatcher()
-    
-    dp.include_router(
-        common.router
-    )
+    dp.include_router(router)
+    dp.include_router(common.router)
     
     logging.info("Бот запущен!")
     await dp.start_polling(bot)

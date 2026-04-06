@@ -3,10 +3,12 @@ import logging
 from aiogram.filters.command import Command, CommandStart, CommandObject
 from aiogram import Router, F, types
 from logic.user_logic import registration, is_user
-from keyboards.main_menu import main_menu_kb, profile_kb
+from keyboards.main_menu import main_menu_kb, profile_kb, orders_kb
 from logic.trade_logic import category_render, products_render, buy_product_render, order_processing
+from logic.order_logic import get_my_orders, get_my_order, inline_keyboards_order, update_order, refill_order
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramBadRequest
 
 class OrderProcess(StatesGroup):
     waiting_for_link = State()     #  Ссылка
@@ -33,6 +35,62 @@ async def cmd_start(message: types.Message, command: CommandObject=None):
 @router.message(F.text == 'Профиль')
 async def profile_menu_handler(message: types.Message):
     await message.answer(f'Выбери, что хочешь посмотреть!', reply_markup=profile_kb())
+
+@router.message(F.text == 'Мои заказы')
+async def order_menu_hand(message: types.Message):
+    orders = await asyncio.to_thread(orders_kb)
+    await message.answer(f'Выбери, что хочешь посмотреть:', reply_markup=orders)
+
+@router.message(F.text == 'Текущие заказы')
+async def now_orders_hand(message: types.Message):
+    orders = await asyncio.to_thread(get_my_orders, message.from_user.id)
+    await message.answer(f'Ваши заказы: ', reply_markup=orders)
+
+@router.callback_query(F.data.startswith('go_my_orders'))
+async def go_my_orders(callback: types.CallbackQuery):
+    orders = await asyncio.to_thread(get_my_orders, callback.from_user.id)
+    await callback.message.edit_text(f'Ваши заказы: ', reply_markup=orders)
+
+@router.callback_query(F.data.startswith('select_'))
+async def select_order(callback: types.CallbackQuery):
+    order_id = int(callback.data.split('_')[1])
+    service_id = int(callback.data.split('_')[2])
+    orders = await asyncio.to_thread(get_my_order, order_id, service_id)
+    keyboard = await asyncio.to_thread(inline_keyboards_order, callback.from_user.id, order_id, service_id)
+    await callback.message.edit_text(orders, reply_markup=keyboard)
+
+@router.callback_query(F.data.startswith('update_'))
+async def update_order_callback(callback: types.CallbackQuery):
+    data = callback.data.split('_')
+    order_id = int(data[1])
+    service_id = int(data[2])
+    update_status = await update_order(order_id)
+    orders = await asyncio.to_thread(get_my_order, order_id, service_id)
+    keyboard = await asyncio.to_thread(inline_keyboards_order, callback.from_user.id, order_id, service_id)
+    try:
+        await callback.message.edit_text(orders, reply_markup=keyboard)
+    except TelegramBadRequest as e:
+        if "message is not modified" in e.message:
+            pass
+        else:
+            raise e
+    await callback.answer(update_status)
+
+#@router.callback_query(F.data.startswith('refill_'))
+#async def refill_order_callback(callback: types.CallbackQuery):
+#    order_id = int(callback.data.split('_')[1])
+#    service_id = int(callback.data.split('_')[2])
+#    orders = await asyncio.to_thread(get_my_order, order_id, service_id)
+#    refill_status = await refill_order(order_id)
+#    keyboard = await asyncio.to_thread(inline_keyboards_order, callback.from_user.id, order_id, service_id)
+#    try:
+#        await callback.message.edit_text(orders, reply_markup=keyboard)
+#    except TelegramBadRequest as e:
+#        if 'message is not modified' in e.message:
+#            pass
+#        else:
+#            raise e
+#        await callback.answer(refill_status)
 
 @router.message(F.text == 'Реферальная система')
 async def ref_system_handler(message: types.Message):
@@ -72,7 +130,7 @@ async def select_category_inline(callback: types.CallbackQuery):
 async def select_product_inline(callback: types.CallbackQuery):
     product_id = int(callback.data.split('_')[-1])
     info_text, keyboard = await asyncio.to_thread(buy_product_render, product_id)
-    await callback.message.edit_text(text=info_text, reply_markup=keyboard, parse_mode="Markdown") 
+    await callback.message.edit_text(text=info_text, reply_markup=keyboard, parse_mode="HTML") 
     await callback.answer()
 
 @router.callback_query(F.data.startswith("buy_"))
@@ -96,7 +154,7 @@ async def get_link(message: types.Message, state: FSMContext):
 @router.message(OrderProcess.waiting_for_count)
 async def get_count(message: types.Message, state: FSMContext):
     if not message.text.isdigit():
-        return await message.answer("Бро, нужно именно число! Попробуй еще раз:")
+        return await message.answer("Нужно именно число! Попробуй еще раз:")
 
     count = int(message.text)
     
