@@ -65,7 +65,7 @@ async def ref_system_handler(message: types.Message):
 @router.message(F.text == 'Товары')
 async def products_one_menu_open(message: types.Message):
     categories = await asyncio.to_thread(category_render, page=0)
-    await message.answer('Выберите категорию: ', reply_markup=categories)
+    await message.answer('Выберите категорию: \nЧтобы включить фильтрацию по названию, введите /search Название\n(допустим /search Twitch)', reply_markup=categories)
 
 @router.message(F.text == 'Статистика')
 async def stats_handler(message: types.Message):

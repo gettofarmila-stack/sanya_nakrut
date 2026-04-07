@@ -1,5 +1,6 @@
 import asyncio
 from aiogram import Router, F, types
+from aiogram.filters.command import Command
 from logic.trade_logic import category_render, products_render, buy_product_render, order_processing
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
@@ -23,6 +24,16 @@ async def change_category_page(callback: types.CallbackQuery):
     markup = await asyncio.to_thread(category_render, page=page)
     await callback.message.edit_reply_markup(reply_markup=markup)
     await callback.answer()
+
+@router.message(Command("search"))
+async def cmd_search(message: types.Message):
+    search_query = message.text.replace("/search", "").strip()
+    if not search_query:
+        return await message.answer("Напиши что искать, например: `/search Twitch`", parse_mode="Markdown")
+    kb = category_render(page=0, query=search_query)
+    if not kb.inline_keyboard:
+        return await message.answer(f"По запросу '{search_query}' ничего не найдено 😕")
+    await message.answer(f"🔍 Результаты поиска по запросу: {search_query}", reply_markup=kb)
 
 @router.callback_query(F.data.startswith('sel_cat_'))
 async def select_category_inline(callback: types.CallbackQuery):

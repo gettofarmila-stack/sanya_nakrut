@@ -3,7 +3,7 @@ import asyncio
 from aiogram import types
 from database.engine import Session
 from database.models import Products, Category, User, Order
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from aiogram import types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -66,31 +66,28 @@ async def add_products():
 
 asyncio.run(add_products())
 
-def category_render(page: int = 0):
+def category_render(page: int = 0, query: str = None):
     builder = InlineKeyboardBuilder()
     limit = 10 
     offset = page * limit 
     with Session() as session:
-        total_count = session.query(Category).count()
-        categories = session.execute(
-            select(Category).offset(offset).limit(limit)
-        ).scalars().all()
+        stmt = select(Category)
+        count_stmt = select(func.count(Category.id))
+        if query:
+            filter_condition = Category.name.ilike(f"%{query}%")
+            stmt = stmt.where(filter_condition)
+            count_stmt = count_stmt.where(filter_condition)
+        total_count = session.execute(count_stmt).scalar()
+        categories = session.execute(stmt.offset(offset).limit(limit)).scalars().all()
         for cat in categories:
-            builder.row(types.InlineKeyboardButton(
-                text=cat.name, 
-                callback_data=f"sel_cat_{cat.id}"
-            ))
+            builder.row(types.InlineKeyboardButton(text=cat.name, callback_data=f"sel_cat_{cat.id}"))
         nav_buttons = []
         if page > 0:
-            nav_buttons.append(types.InlineKeyboardButton(
-                text="⬅️ Назад", 
-                callback_data=f"cat_page_{page - 1}"
-            ))
+            cb_back = f"cat_page_{page - 1}" if not query else f"src_page_{page - 1}_{query}"
+            nav_buttons.append(types.InlineKeyboardButton(text="⬅️ Назад", callback_data=cb_back))
         if offset + limit < total_count:
-            nav_buttons.append(types.InlineKeyboardButton(
-                text="Вперед ➡️", 
-                callback_data=f"cat_page_{page + 1}"
-            ))
+            cb_next = f"cat_page_{page + 1}" if not query else f"src_page_{page + 1}_{query}"
+            nav_buttons.append(types.InlineKeyboardButton(text="Вперед ➡️", callback_data=cb_next))
         if nav_buttons:
             builder.row(*nav_buttons) 
         return builder.as_markup()
