@@ -1,14 +1,11 @@
 
 import aiohttp
-import asyncio
 import logging
 from aiogram import types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from database.engine import Session, AsyncSession
 from database.models import Order, Products
 from sqlalchemy import select
-import sqlalchemy
-from sqlalchemy.orm import selectinload
 from config import smm_key, smm_link
 from datetime import datetime
 

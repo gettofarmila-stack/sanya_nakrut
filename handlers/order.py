@@ -19,12 +19,18 @@ async def select_old_order(callback: types.CallbackQuery):
 @router.callback_query(F.data.startswith('go_to_old_orders'))
 async def go_to_old_orders_inline(callback: types.CallbackQuery):
     orders = await asyncio.to_thread(get_my_old_orders, callback.from_user.id)
-    await callback.message.edit_text(f'Ваши заказы:', reply_markup=orders)
+    if orders:
+        await callback.message.edit_text(f'Ваши заказы: ', reply_markup=orders)
+    else: 
+        await callback.message.edit_text(f'У вас ещё нет заказов!', reply_markup=orders)
 
 @router.callback_query(F.data.startswith('go_my_orders'))
 async def go_my_orders(callback: types.CallbackQuery):
     orders = await asyncio.to_thread(get_my_orders, callback.from_user.id)
-    await callback.message.edit_text(f'Ваши заказы: ', reply_markup=orders)
+    if orders:
+        await callback.message.edit_text(f'Ваши заказы: ', reply_markup=orders)
+    else: 
+        await callback.message.edit_text(f'У вас ещё нет заказов!', reply_markup=orders)
 
 @router.callback_query(F.data.startswith('select_'))
 async def select_order(callback: types.CallbackQuery):

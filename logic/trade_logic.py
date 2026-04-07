@@ -3,7 +3,8 @@ import asyncio
 from aiogram import types
 from database.engine import Session
 from database.models import Products, Category, User, Order
-from sqlalchemy import select, distinct, text
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from aiogram import types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config import smm_key, smm_link
@@ -18,9 +19,7 @@ async def add_products():
             if response.status != 200:
                 print(f"Ошибка API: {response.status}")
                 return
-            
             data_list = await response.json()
-            
             with Session() as db_session:
                 for data in data_list:
                     sid = int(data['service'])
@@ -38,9 +37,7 @@ async def add_products():
                     product = db_session.execute(
                         select(Products).where(Products.service_id == sid)
                     ).scalar_one_or_none()
-
                     if product:
-                        # Обновляем существующий товар
                         product.name = data['name']
                         product.rate = final_rate
                         product.category_id = category_obj.id
@@ -48,7 +45,6 @@ async def add_products():
                         product.max = int(data['max'])
                         product.description = data.get('description', '')
                     else:
-                        # Создаем новый товар
                         new_product = Products(
                             service_id=sid,
                             name=data['name'],
@@ -125,7 +121,7 @@ def buy_product_render(service_id):
     
 async def order_processing(uid, service_id, count_of_product, link, message: types.Message):
     with Session() as session:
-        user = session.execute(select(User).where(User.user_id == uid)).scalar_one_or_none()
+        user = session.execute(select(User).options(selectinload(User.stats)).where(User.user_id == uid)).scalar_one_or_none()
         product = session.execute(select(Products).where(Products.service_id == service_id)).scalar_one_or_none()
         if count_of_product < product.min:
             return(f'Слишком маленький заказ! Минимальный заказ у этого продукта {product.min}')
@@ -134,6 +130,7 @@ async def order_processing(uid, service_id, count_of_product, link, message: typ
         if user.stats.balance < order_sum:
             return(f'Недостаточно средств! Вам не хватает {order_sum - user.stats.balance}')
         user.stats.balance -= order_sum
+        user.stats.total_spend += order_sum
         session.commit()
         async with aiohttp.ClientSession() as c_session:
             url = smm_link
@@ -149,7 +146,7 @@ async def order_processing(uid, service_id, count_of_product, link, message: typ
                     result = await response.json()
                     if "order" in result:
                         order_id = result["order"]
-                        new_order = Order(owner_id=uid, order_id=order_id, order_sum=(order_sum), service_id=service_id, update_cooldown=datetime.now())   
+                        new_order = Order(owner_id=uid, order_id=order_id, order_sum=(order_sum), service_id=service_id, update_cooldown=datetime.now(), status='In progress')   
                         session.add(new_order)
                         session.commit()                
                         await message.answer(f"✅ Заказ создан!\n С вашего баланса списано {order_sum}\nID заказа в системе: {order_id}")
@@ -163,4 +160,3 @@ async def order_processing(uid, service_id, count_of_product, link, message: typ
                 session.commit()
                 print(f"Ошибка: {e}")
                 await message.answer("🛠 Техническая ошибка. Деньги возвращены на баланс.")
-

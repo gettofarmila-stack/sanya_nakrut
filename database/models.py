@@ -16,13 +16,14 @@ class User(Base):
 
     stats = relationship('Stats', back_populates='user', uselist=False)
     orders = relationship('Order', back_populates='user')
+    payments = relationship('Payment', back_populates='user')
 
 class Stats(Base):
     __tablename__ = 'stats'
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, ForeignKey('users.user_id'), unique=True)
     balance = Column(Numeric(10, 2), default=0.00)
-    total_spend = Column(BigInteger, default=0, nullable=False)
+    total_spend = Column(Numeric(10, 2), default=0.00, nullable=False)
 
     user = relationship('User', back_populates='stats')
 
@@ -64,5 +65,15 @@ class Order(Base):
     update_cooldown = Column(DateTime)
 
     user = relationship('User', back_populates='orders')
+
+class Payment(Base):
+    __tablename__ = 'payments'
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(BigInteger, ForeignKey('users.user_id'))
+    topup_sum = Column(Numeric(10, 2), nullable=False)
+    payment_date = Column(DateTime, default=datetime.now)
+    is_completed = Column(Boolean, default=False)
+
+    user = relationship('User', back_populates='payments')
 
 Base.metadata.create_all(engine)

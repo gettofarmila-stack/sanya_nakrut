@@ -2,7 +2,7 @@ import asyncio
 import logging
 from aiogram.filters.command import CommandStart, CommandObject
 from aiogram import Router, F, types
-from logic.user_logic import registration, is_user
+from logic.user_logic import registration, is_user, get_my_stats
 from keyboards.main_menu import main_menu_kb, profile_kb, orders_kb
 from logic.trade_logic import category_render
 from logic.order_logic import get_my_orders, get_my_old_orders
@@ -44,12 +44,18 @@ async def order_menu_hand(message: types.Message):
 @router.message(F.text == 'Текущие заказы')
 async def now_orders_hand(message: types.Message):
     orders = await asyncio.to_thread(get_my_orders, message.from_user.id)
-    await message.answer(f'Ваши заказы: ', reply_markup=orders)
+    if orders:
+        await message.answer(f'Ваши заказы: ', reply_markup=orders)
+    else: 
+        await message.answer(f'У вас ещё нет заказов!', reply_markup=orders)
 
 @router.message(F.text == 'История заказов')
 async def old_orders_hand(message: types.Message):
     orders = await asyncio.to_thread(get_my_old_orders, message.from_user.id)
-    await message.answer(f'Ваши заказы: ', reply_markup=orders)
+    if orders:
+        await message.answer(f'Ваши заказы: ', reply_markup=orders)
+    else: 
+        await message.answer(f'У вас ещё нет заказов!', reply_markup=orders)
 
 @router.message(F.text == 'Реферальная система')
 async def ref_system_handler(message: types.Message):
@@ -60,3 +66,8 @@ async def ref_system_handler(message: types.Message):
 async def products_one_menu_open(message: types.Message):
     categories = await asyncio.to_thread(category_render, page=0)
     await message.answer('Выберите категорию: ', reply_markup=categories)
+
+@router.message(F.text == 'Статистика')
+async def stats_handler(message: types.Message):
+    stats = await get_my_stats(message.from_user.id)
+    await message.answer(stats)
