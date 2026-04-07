@@ -93,10 +93,19 @@ def inline_keyboards_order(uid, order_id, service_id):
     builder.row(types.InlineKeyboardButton(text='Назад', callback_data=f'go_my_orders'))
     return builder.as_markup()
 
-def inline_keyboards_old_order(uid):
+def inline_keyboards_old_order(uid, order_id):
     builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text='Удалить из истории', callback_data=f'removeoldorder_{order_id}'))
     builder.row(types.InlineKeyboardButton(text='Назад', callback_data=f'go_to_old_orders'))
     return builder.as_markup()
+
+async def remove_old_order(order_id):
+    async with AsyncSession() as session:
+        order_beta = await session.execute(select(Order).where(Order.order_id == order_id))
+        order = order_beta.scalar_one_or_none()
+        await session.delete(order)
+        await session.commit()
+        return('Успешно удалено!')
 
 def get_my_order(order_id, service_id):
     with Session() as session:
